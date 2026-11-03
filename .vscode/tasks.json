@@ -1,0 +1,45 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "ASMT AI: Start backend",
+      "type": "shell",
+      "command": "dotnet",
+      "args": ["run", "--project", "backend/src/AsmtAI.Api", "--launch-profile", "http"],
+      "options": { "cwd": "${workspaceFolder}" },
+      "isBackground": true,
+      "problemMatcher": {
+        "base": "$msCompile",
+        "background": {
+          "activeOnStart": true,
+          "beginsPattern": "Building\\.\\.\\.",
+          "endsPattern": "Now listening on: http://localhost:5233"
+        }
+      },
+      "presentation": { "panel": "dedicated" }
+    },
+    {
+      "label": "ASMT AI: Start frontend",
+      "type": "shell",
+      "command": "npm",
+      "args": ["start", "--prefix", "frontend", "--", "--host", "127.0.0.1", "--port", "4200"],
+      "options": { "cwd": "${workspaceFolder}" },
+      "isBackground": true,
+      "problemMatcher": {
+        "base": "$tsc",
+        "background": {
+          "activeOnStart": true,
+          "beginsPattern": "Changes detected",
+          "endsPattern": "Local:.*http://127\\.0\\.0\\.1:4200/"
+        }
+      },
+      "presentation": { "panel": "dedicated" }
+    },
+    {
+      "label": "ASMT AI: Run app",
+      "dependsOrder": "sequence",
+      "dependsOn": ["ASMT AI: Start backend", "ASMT AI: Start frontend"],
+      "problemMatcher": []
+    }
+  ]
+}
