@@ -1,6 +1,6 @@
 # Pre-assessment AI
 
-An Angular and ASP.NET Core scaffold for the request-side pre-assessment workflow. The existing browser prototype and OpenPencil mockups are separate design artifacts.
+An Angular and ASP.NET Core scaffold for the request-side pre-assessment workflow. The API uses controllers and action methods. The existing browser prototype and OpenPencil mockups are separate design artifacts.
 
 ## Structure
 
@@ -9,7 +9,7 @@ An Angular and ASP.NET Core scaffold for the request-side pre-assessment workflo
 - `backend/src/AsmtAI.Domain`: domain types, independent of application and infrastructure.
 - `backend/src/AsmtAI.Application`: use cases and interfaces, depending on Domain.
 - `backend/src/AsmtAI.Infrastructure`: EF Core persistence and Microsoft Agent Framework integration, depending on Application.
-- `backend/src/AsmtAI.Api`: ASP.NET Core minimal API and composition root.
+- `backend/src/AsmtAI.Api`: ASP.NET Core controllers, request services, and composition root.
 - `backend/tests/AsmtAI.Application.Tests`: application use-case tests.
 - `backend/tests/AsmtAI.Infrastructure.Tests`: persistence and provider-selection tests.
 - `backend/tests/AsmtAI.Api.Tests`: local workflow and role-boundary tests.

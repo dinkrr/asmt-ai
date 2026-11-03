@@ -1,6 +1,6 @@
 using System.Net;
 using System.Net.Http.Json;
-using AsmtAI.Api.Endpoints;
+using AsmtAI.Api.Contracts;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
@@ -10,6 +10,18 @@ namespace AsmtAI.Api.Tests;
 
 public sealed class RequestEndpointsTests
 {
+    [Theory]
+    [InlineData("Development")]
+    [InlineData("Production")]
+    public async Task HealthEndpointIsAvailableInAllEnvironments(string environment)
+    {
+        using var factory = CreateFactory(environment, IPAddress.Loopback);
+        using var client = factory.CreateClient();
+        var response = await client.GetAsync("/api/health");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Contains("\"status\":\"ok\"", await response.Content.ReadAsStringAsync());
+    }
+
     [Fact]
     public async Task ApplicantAndExpertCanOnlyUseTheirDemoActions()
     {
@@ -26,6 +38,7 @@ public sealed class RequestEndpointsTests
         var summary = await created.Content.ReadFromJsonAsync<AssessmentRequestSummary>();
         Assert.NotNull(summary);
         var url = $"/api/requests/{summary.Id}";
+        Assert.Equal(url, created.Headers.Location?.OriginalString);
 
         using var expertForm = CreateForm();
         Assert.Equal(HttpStatusCode.Forbidden, (await expert.PostAsync("/api/requests/", expertForm)).StatusCode);
@@ -39,7 +52,9 @@ public sealed class RequestEndpointsTests
         Assert.Equal("Feedback", expertDetail?.Feedback);
         Assert.Null(applicantDetail?.Transcript);
         Assert.Null(applicantDetail?.Feedback);
-        Assert.Equal(new byte[] { 1, 2, 3 }, await expert.GetByteArrayAsync($"{url}/presentation"));
+        var presentation = await expert.GetAsync($"{url}/presentation");
+        Assert.Equal("nosniff", presentation.Headers.GetValues("X-Content-Type-Options").Single());
+        Assert.Equal(new byte[] { 1, 2, 3 }, await presentation.Content.ReadAsByteArrayAsync());
     }
 
     [Fact]
@@ -55,7 +70,18 @@ public sealed class RequestEndpointsTests
         invalidForm.Add(new StringContent("Demo applicant"), "candidateName");
         invalidForm.Add(new StringContent("A3"), "targetLevel");
         invalidForm.Add(new ByteArrayContent([1]), "presentation", "notes.txt");
-        Assert.Equal(HttpStatusCode.BadRequest, (await applicant.PostAsync("/api/requests/", invalidForm)).StatusCode);
+        var invalidResponse = await applicant.PostAsync("/api/requests/", invalidForm);
+        Assert.Equal(HttpStatusCode.BadRequest, invalidResponse.StatusCode);
+        Assert.Equal("application/json", invalidResponse.Content.Headers.ContentType?.MediaType);
+        Assert.Equal("The presentation must be a .ppt or .pptx file.", await invalidResponse.Content.ReadFromJsonAsync<string>());
+
+        using var oversizedForm = new MultipartFormDataContent();
+        oversizedForm.Add(new StringContent("Demo applicant"), "candidateName");
+        oversizedForm.Add(new StringContent("A3"), "targetLevel");
+        oversizedForm.Add(new ByteArrayContent(new byte[10 * 1024 * 1024 + 1]), "presentation", "slides.pptx");
+        var oversizedResponse = await applicant.PostAsync("/api/requests/", oversizedForm);
+        Assert.Equal(HttpStatusCode.BadRequest, oversizedResponse.StatusCode);
+        Assert.Equal("Choose a PowerPoint presentation up to 10 MB.", await oversizedResponse.Content.ReadFromJsonAsync<string>());
 
         using var validForm = CreateForm();
         var created = await applicant.PostAsync("/api/requests/", validForm);
@@ -70,7 +96,12 @@ public sealed class RequestEndpointsTests
     {
         using var factory = CreateFactory("Development", IPAddress.Loopback);
         using var client = factory.CreateClient();
-        Assert.Equal(HttpStatusCode.BadRequest, (await client.GetAsync("/api/requests/")).StatusCode);
+        var noRole = await client.GetAsync("/api/requests/");
+        Assert.Equal(HttpStatusCode.BadRequest, noRole.StatusCode);
+        Assert.Equal("no-store", noRole.Headers.CacheControl?.ToString());
+        Assert.Equal("A local demo role is required.", await noRole.Content.ReadFromJsonAsync<string>());
+        using var malformedReview = new StringContent("{", System.Text.Encoding.UTF8, "application/json");
+        Assert.Equal(HttpStatusCode.BadRequest, (await client.PutAsync($"/api/requests/{Guid.NewGuid()}/review", malformedReview)).StatusCode);
 
         using var remoteFactory = CreateFactory("Development", IPAddress.Parse("192.0.2.1"));
         using var remote = remoteFactory.CreateClient();
@@ -85,6 +116,18 @@ public sealed class RequestEndpointsTests
         using var client = factory.CreateClient();
         client.DefaultRequestHeaders.Add("X-Demo-Role", "applicant");
         Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync("/api/requests/")).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await client.DeleteAsync("/api/requests/")).StatusCode);
+    }
+
+    [Fact]
+    public async Task DevelopmentOpenApiDocumentsControllerRoutes()
+    {
+        using var factory = CreateFactory("Development", IPAddress.Loopback);
+        using var client = factory.CreateClient();
+        var document = await client.GetStringAsync("/openapi/v1.json");
+        Assert.Contains("/api/health", document);
+        Assert.Contains("/api/requests", document);
+        Assert.Contains("/api/requests/{id}/review", document);
     }
 
     private static MultipartFormDataContent CreateForm()
