@@ -1,0 +1,97 @@
+<div class="layout">
+  <aside class="sidebar" aria-label="Requests">
+    <div class="sidebar-heading">
+      <h2>{{ roles.role() === 'applicant' ? 'My requests' : 'Review queue' }}</h2>
+      <span class="count">{{ requests().length }}</span>
+    </div>
+    @if (roles.role() === 'applicant') {
+      <div class="sidebar-action"><button class="primary full" type="button" (click)="newRequest()">New request</button></div>
+    }
+    @if (loading()) {
+      <p class="sidebar-empty">Loading requests...</p>
+    } @else if (requests().length === 0) {
+      <p class="sidebar-empty">No requests available</p>
+    } @else {
+      <nav class="request-list" aria-label="Request list">
+        @for (request of requests(); track request.id) {
+          <button type="button" class="request-item" [class.active]="selected()?.request?.id === request.id" (click)="openRequest(request)">
+            <span class="request-name">{{ request.candidateName }}</span>
+            <span class="request-meta">.NET / {{ request.targetLevel }}</span>
+            <span class="request-status">{{ request.reviewed ? 'Reviewed' : 'Submitted' }}</span>
+          </button>
+        }
+      </nav>
+    }
+  </aside>
+  <main class="content">
+    <div class="breadcrumb">Requests <span>/</span> {{ creating() ? 'New request' : selected()?.request?.candidateName || 'Workspace' }}</div>
+    <section class="workspace">
+      <div class="heading"><div><span class="eyebrow">PRE-ASSESSMENT</span><h1>{{ creating() ? 'New request' : selected()?.request?.candidateName || 'Requests' }}</h1></div><span class="status-pill">{{ roles.role() === 'applicant' ? 'Applicant' : 'ASMT head / expert' }}</span></div>
+      <div class="separator"></div>
+      @if (error()) { <div class="message error" role="alert">{{ error() }}</div> }
+      @if (notice()) { <div class="message success" role="status">{{ notice() }}</div> }
+
+      @if (creating() && roles.role() === 'applicant') {
+        <form class="form-section" (ngSubmit)="createRequest()">
+          <div class="section-heading"><div><span class="section-index">01</span><h2>Request details</h2></div><span class="section-note">.NET pre-assessment</span></div>
+          <div class="field-grid">
+            <label>Candidate name <span class="required">*</span><input name="candidateName" [(ngModel)]="candidateName" maxlength="100" required autocomplete="name" placeholder="Enter name"></label>
+            <label>Target level <span class="required">*</span><select name="targetLevel" [(ngModel)]="targetLevel"><option value="A2">A2</option><option value="A3">A3</option><option value="A4">A4</option></select></label>
+          </div>
+          <div class="section-heading second"><div><span class="section-index">02</span><h2>Presentation</h2></div><span class="section-note">PPT or PPTX / 10 MB maximum</span></div>
+          <label class="upload-label">PowerPoint presentation <span class="required">*</span><input type="file" accept=".ppt,.pptx" (change)="selectFile($event)" required></label>
+          <div class="form-actions"><button class="primary" type="submit" [disabled]="saving()">{{ saving() ? 'Submitting...' : 'Submit request' }}</button><button class="secondary" type="button" (click)="creating.set(false)" [disabled]="saving()">Cancel</button></div>
+        </form>
+      } @else if (selected(); as detail) {
+        <div class="detail-meta">
+          <div><span>Candidate</span><strong>{{ detail.request.candidateName }}</strong></div>
+          <div><span>Discipline</span><strong>.NET</strong></div>
+          <div><span>Target level</span><strong>{{ detail.request.targetLevel }}</strong></div>
+          <div><span>Status</span><strong class="state">{{ detail.request.reviewed ? 'Reviewed' : 'Submitted' }}</strong></div>
+        </div>
+        <section class="document-section">
+          <div class="section-heading"><div><span class="section-index">01</span><h2>Presentation</h2></div></div>
+          <div class="document-row"><div><span class="document-type">PPT</span><strong>{{ detail.request.presentationName }}</strong></div><button class="secondary" type="button" (click)="downloadPresentation()">Download</button></div>
+        </section>
+        @if (roles.role() === 'expert') {
+          <div class="expert-tabs" role="tablist" aria-label="Expert workspace">
+            <button type="button" role="tab" id="tab-review" aria-controls="panel-review" [attr.aria-selected]="expertView() === 'review'" [attr.tabindex]="expertView() === 'review' ? 0 : -1" (click)="expertView.set('review')" (keydown)="navigateExpertTabs($event)">AI Review</button>
+            <button type="button" role="tab" id="tab-questions" aria-controls="panel-questions" [attr.aria-selected]="expertView() === 'questions'" [attr.tabindex]="expertView() === 'questions' ? 0 : -1" (click)="expertView.set('questions')" (keydown)="navigateExpertTabs($event)">Session Questions</button>
+            <button type="button" role="tab" id="tab-feedback" aria-controls="panel-feedback" [attr.aria-selected]="expertView() === 'feedback'" [attr.tabindex]="expertView() === 'feedback' ? 0 : -1" (click)="expertView.set('feedback')" (keydown)="navigateExpertTabs($event)">Session Feedback</button>
+          </div>
+          <form class="review-section" (ngSubmit)="saveReview()">
+            <div role="tabpanel" id="panel-review" aria-labelledby="tab-review" [hidden]="expertView() !== 'review'" tabindex="0">
+              <div class="section-heading"><div><span class="section-index">01</span><h2>Self-presentation analysis</h2></div><button class="secondary" type="button" disabled aria-describedby="ai-status-review">Analyze presentation</button></div>
+              <p class="ai-status" id="ai-status-review">AI generation is not connected.</p>
+              <div class="analysis-empty"><strong>No analysis available</strong><span>Presentation: {{ detail.request.presentationName }}</span></div>
+            </div>
+            <div role="tabpanel" id="panel-questions" aria-labelledby="tab-questions" [hidden]="expertView() !== 'questions'" tabindex="0">
+              <div class="section-heading"><div><span class="section-index">02</span><h2>Question set</h2></div><button class="secondary" type="button" disabled aria-describedby="ai-status-questions">Generate questions</button></div>
+              <p class="ai-status" id="ai-status-questions">AI generation is not connected.</p>
+              <label>Interview questions<textarea name="questions" [(ngModel)]="review.questions" maxlength="20000" rows="8" placeholder="Add questions"></textarea></label>
+            </div>
+            <div role="tabpanel" id="panel-feedback" aria-labelledby="tab-feedback" [hidden]="expertView() !== 'feedback'" tabindex="0">
+              <div class="section-heading"><div><span class="section-index">03</span><h2>Assessment feedback</h2></div><button class="secondary" type="button" disabled aria-describedby="ai-status-feedback">Generate feedback</button></div>
+              <p class="ai-status" id="ai-status-feedback">AI generation is not connected.</p>
+              <label>Interview transcript<textarea name="transcript" [(ngModel)]="review.transcript" maxlength="200000" rows="7" placeholder="Add transcript"></textarea></label>
+              <label>Feedback<textarea name="feedback" [(ngModel)]="review.feedback" maxlength="20000" rows="6" placeholder="Write feedback"></textarea></label>
+              <label class="checkbox"><input name="reviewed" type="checkbox" [(ngModel)]="review.reviewed"> Mark request reviewed</label>
+            </div>
+            @if (expertView() !== 'review') {
+              <div class="form-actions"><button class="primary" type="submit" [disabled]="saving()">{{ saving() ? 'Saving...' : 'Save review' }}</button></div>
+            }
+          </form>
+        }
+      } @else {
+        @if (roles.role() === 'expert') {
+          <nav class="expert-tabs" aria-label="Expert workspace">
+            <button type="button" disabled title="Select a request">AI Review</button>
+            <button type="button" disabled title="Select a request">Session Questions</button>
+            <button type="button" disabled title="Select a request">Session Feedback</button>
+          </nav>
+        }
+        <div class="empty-state"><span class="empty-icon" aria-hidden="true">&#9633;</span><h2>No request selected</h2><p>{{ roles.role() === 'applicant' ? 'Create a request or select one from the list.' : 'Select a request from the review queue.' }}</p></div>
+      }
+    </section>
+  </main>
+</div>

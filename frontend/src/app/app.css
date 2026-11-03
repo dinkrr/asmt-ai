@@ -1,0 +1,16 @@
+:host { display:block; min-height:100vh; }
+.topbar { height:54px; display:flex; align-items:center; gap:46px; padding:0 24px; color:#fff; background:#30313f; }
+.brand { display:flex; align-items:center; gap:10px; min-width:190px; }
+.brand-mark { display:grid; place-items:center; width:30px; height:30px; background:#fff; color:#30313f; border-radius:50%; font-weight:700; font-size:17px; }
+.brand strong,.brand small { display:block; line-height:1; }
+.brand strong { font-size:14px; }
+.brand small { margin-top:4px; font-size:10px; color:#c6cbd6; }
+.active-nav { height:54px; display:flex; align-items:center; border-bottom:3px solid #00a7c7; font-size:14px; font-weight:600; }
+.role-picker { margin-left:auto; display:flex; align-items:center; gap:8px; color:#d5dbe5; font-size:12px; white-space:nowrap; }
+.role-picker select { max-width:180px; padding:6px 8px; border:1px solid #6b7180; border-radius:3px; background:#3e404e; color:#fff; font:inherit; }
+.connection { display:flex; align-items:center; gap:8px; color:#e0e5ed; font-size:12px; white-space:nowrap; }
+.dot { width:7px; height:7px; border-radius:50%; background:#db9d55; }
+.dot.online { background:#65d492; }
+.demo-banner { display:flex; align-items:center; gap:10px; padding:6px 24px; background:#fff3d4; color:#725210; font-size:12px; }
+.demo-banner strong { font-size:10px; }
+@media (max-width:620px) { .topbar { gap:10px; padding:0 10px; } .brand { min-width:0; } .brand strong { font-size:11px; } .brand small, .active-nav, .role-picker span, .connection { display:none; } .role-picker select { max-width:155px; } }

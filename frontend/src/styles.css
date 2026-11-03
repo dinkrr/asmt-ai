@@ -1,0 +1,5 @@
+@import url('https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@400;600;700&display=swap');
+
+:root { color-scheme: light; font-family: 'Source Sans 3', sans-serif; color: #414b5c; background: #f3f5f8; }
+* { box-sizing: border-box; }
+body { margin: 0; min-width: 280px; }

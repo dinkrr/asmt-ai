@@ -1,0 +1,10 @@
+**/bin/
+**/obj/
+**/TestResults/
+.vs/
+.env
+.env.*
+!.env.example
+.codemie/
+.playwright-mcp/
+design/assessment-observations.md

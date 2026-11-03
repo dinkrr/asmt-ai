@@ -1,0 +1,8 @@
+<header class="topbar">
+  <div class="brand"><span class="brand-mark">A</span><span><strong>PRE-ASSESSMENT</strong><small>Digital Platform</small></span></div>
+  <span class="active-nav">Requests</span>
+  <label class="role-picker"><span>Local role</span><select aria-label="Local role" [value]="roles.role()" (change)="selectRole($event)"><option value="applicant">Applicant</option><option value="expert">ASMT head / expert</option></select></label>
+  <div class="connection" role="status"><span class="dot" [class.online]="apiStatus() === 'online'"></span>{{ statusLabel() }}</div>
+</header>
+<div class="demo-banner"><strong>LOCAL DEMO</strong><span>Synthetic data only</span></div>
+<router-outlet />

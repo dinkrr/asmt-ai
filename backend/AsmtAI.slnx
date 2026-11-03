@@ -1,0 +1,13 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/AsmtAI.Api/AsmtAI.Api.csproj" />
+    <Project Path="src/AsmtAI.Application/AsmtAI.Application.csproj" />
+    <Project Path="src/AsmtAI.Domain/AsmtAI.Domain.csproj" />
+    <Project Path="src/AsmtAI.Infrastructure/AsmtAI.Infrastructure.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/AsmtAI.Api.Tests/AsmtAI.Api.Tests.csproj" />
+    <Project Path="tests/AsmtAI.Application.Tests/AsmtAI.Application.Tests.csproj" />
+    <Project Path="tests/AsmtAI.Infrastructure.Tests/AsmtAI.Infrastructure.Tests.csproj" />
+  </Folder>
+</Solution>
