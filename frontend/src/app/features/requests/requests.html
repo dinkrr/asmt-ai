@@ -61,9 +61,41 @@
           </div>
           <form class="review-section" (ngSubmit)="saveReview()">
             <div role="tabpanel" id="panel-review" aria-labelledby="tab-review" [hidden]="expertView() !== 'review'" tabindex="0">
-              <div class="section-heading"><div><span class="section-index">01</span><h2>Self-presentation analysis</h2></div><button class="secondary" type="button" disabled aria-describedby="ai-status-review">Analyze presentation</button></div>
-              <p class="ai-status" id="ai-status-review">AI generation is not connected.</p>
-              <div class="analysis-empty"><strong>No analysis available</strong><span>Presentation: {{ detail.request.presentationName }}</span></div>
+              <div class="section-heading"><div><span class="section-index">01</span><h2>Self-presentation analysis</h2></div><button class="secondary" type="button" (click)="analyzePresentation()" [disabled]="analyzing()">{{ analyzing() ? 'Analyzing...' : 'Analyze presentation' }}</button></div>
+              @if (analysis(); as draft) {
+                <p class="ai-status">AI draft for expert review. Not saved.</p>
+                <section class="analysis-panel" aria-labelledby="category-assessment-heading">
+                  <div class="analysis-panel-heading"><h3 id="category-assessment-heading">Category assessment</h3><span>{{ draft.categories.length }} areas reviewed</span></div>
+                  @for (category of draft.categories; track category.name) {
+                    <article class="assessment-row">
+                      <strong>{{ category.name }}</strong>
+                      <span class="assessment-status" [class.pass]="category.status === 'Pass'" [class.thin]="category.status === 'Thin'" [class.insufficient]="category.status === 'Insufficient'">{{ category.status }}</span>
+                      <p>{{ category.notes }}</p>
+                    </article>
+                  }
+                </section>
+                <section class="analysis-panel" aria-labelledby="gaps-heading">
+                  <div class="analysis-panel-heading"><h3 id="gaps-heading">Gaps to probe in session</h3></div>
+                  @if (draft.gaps.length) {
+                    @for (gap of draft.gaps; track $index) {
+                      <article class="gap-row"><span class="gap-number">{{ ($index + 1).toString().padStart(2, '0') }}</span><div><strong>{{ gap.skill }}</strong><span>{{ gap.category }} / {{ gap.reason }}</span></div></article>
+                    }
+                  } @else {
+                    <p class="analysis-note">No required skills were identified as gaps in the presentation.</p>
+                  }
+                </section>
+                <section class="analysis-panel decision-panel" [class.send-back]="draft.decision === 'SendBack'" aria-labelledby="decision-heading">
+                  <div class="analysis-panel-heading"><h3 id="decision-heading">Committee decision</h3><span class="decision-badge" [class.send-back-badge]="draft.decision === 'SendBack'">AI suggests: {{ draft.decision === 'Approve' ? 'Proceed' : 'Send back' }}</span></div>
+                  <p>{{ draft.decisionReason }}</p>
+                  @if (draft.candidateFeedback.length) {
+                    <h4>Candidate feedback</h4>
+                    <ul>@for (item of draft.candidateFeedback; track $index) { <li>{{ item }}</li> }</ul>
+                  }
+                  <span class="analysis-note">The committee owns the decision.</span>
+                </section>
+              } @else {
+                <div class="analysis-empty"><strong>No analysis available</strong><span>Presentation: {{ detail.request.presentationName }}</span></div>
+              }
             </div>
             <div role="tabpanel" id="panel-questions" aria-labelledby="tab-questions" [hidden]="expertView() !== 'questions'" tabindex="0">
               <div class="section-heading"><div><span class="section-index">02</span><h2>Question set</h2></div><button class="secondary" type="button" disabled aria-describedby="ai-status-questions">Generate questions</button></div>

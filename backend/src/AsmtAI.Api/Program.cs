@@ -5,6 +5,12 @@ using AsmtAI.Infrastructure.Persistence;
 
 var builder = WebApplication.CreateBuilder(args);
 
+if (builder.Environment.IsDevelopment())
+{
+    builder.Configuration["Ai:Provider"] ??= "copilot";
+    builder.Configuration["Ai:AgentRepositoryPath"] ??= Path.GetFullPath(Path.Combine(builder.Environment.ContentRootPath, "../../../../ai-agents"));
+}
+
 builder.Services.AddOpenApi();
 builder.Services.AddProblemDetails();
 builder.Services.AddControllers()

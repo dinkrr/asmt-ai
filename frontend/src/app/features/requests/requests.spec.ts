@@ -48,7 +48,7 @@ describe('Requests', () => {
     http.expectOne('/api/requests/123').flush({ request: summary, questions: 'Existing question', transcript: 'Existing transcript', feedback: 'Existing feedback' });
     await fixture.whenStable();
     expect(element.querySelector('#tab-review')?.getAttribute('aria-selected')).toBe('true');
-    expect(element.querySelector<HTMLButtonElement>('#panel-review button')?.disabled).toBe(true);
+    expect(element.querySelector<HTMLButtonElement>('#panel-review button')?.disabled).toBe(false);
     element.querySelector<HTMLButtonElement>('#tab-questions')!.click();
     await fixture.whenStable();
     expect(element.querySelector<HTMLTextAreaElement>('textarea[name="questions"]')?.value).toBe('Existing question');
@@ -62,6 +62,55 @@ describe('Requests', () => {
     expect(save.request.body).toEqual({ questions: 'Existing question', transcript: 'Existing transcript', feedback: 'Existing feedback', reviewed: false });
     save.flush(null);
     http.expectOne('/api/requests/').flush([summary]);
+    http.verify();
+  });
+
+  it('displays an unsaved AI draft and ignores results for a previous request', async () => {
+    await TestBed.configureTestingModule({ imports: [Requests], providers: [provideHttpClient(), provideHttpClientTesting()] }).compileComponents();
+    TestBed.inject(RoleService).select('expert');
+    const fixture = TestBed.createComponent(Requests);
+    const http = TestBed.inject(HttpTestingController);
+    const first = { id: '1', candidateName: 'First', targetLevel: 'A3', presentationName: 'first.pptx', createdAt: '2026-01-01', reviewed: false };
+    const second = { ...first, id: '2', candidateName: 'Second' };
+    fixture.detectChanges();
+    http.expectOne('/api/requests/').flush([first, second]);
+    await fixture.whenStable();
+    const draft = {
+      categories: [
+        { name: 'Development Experience', status: 'Pass', notes: 'Evidence & <examples> are present.' },
+        { name: 'Architecture on Practice', status: 'Thin', notes: 'Trade-offs need more depth.' },
+        { name: 'Engineering Excellence', status: 'Pass', notes: 'Testing and delivery are covered.' },
+        { name: 'Leadership', status: 'Pass', notes: 'Mentoring is described.' }
+      ],
+      gaps: [{ category: 'Architecture on Practice', skill: 'API versioning', reason: 'No example is given.' }],
+      candidateFeedback: [],
+      decision: 'Approve',
+      decisionReason: 'All major categories are represented.'
+    };
+    const element = fixture.nativeElement as HTMLElement;
+    element.querySelectorAll<HTMLButtonElement>('.request-item')[0].click();
+    http.expectOne('/api/requests/1').flush({ request: first });
+    await fixture.whenStable();
+    element.querySelector<HTMLButtonElement>('#panel-review button')!.click();
+    const analysis = http.expectOne('/api/requests/1/presentation/analysis');
+    expect(analysis.request.headers.get('X-Demo-Role')).toBe('expert');
+    analysis.flush(draft);
+    await fixture.whenStable();
+    expect(element.querySelectorAll('.assessment-row').length).toBe(4);
+    expect(element.querySelector('.assessment-status.thin')?.textContent).toContain('Thin');
+    expect(element.querySelector('.gap-row')?.textContent).toContain('API versioning');
+    expect(element.querySelector('.decision-panel')?.textContent).toContain('All major categories are represented.');
+    expect(element.querySelector('.assessment-row')?.textContent).toContain('Evidence & <examples> are present.');
+    expect(element.textContent).toContain('Not saved');
+
+    element.querySelector<HTMLButtonElement>('#panel-review button')!.click();
+    const lateAnalysis = http.expectOne('/api/requests/1/presentation/analysis');
+    element.querySelectorAll<HTMLButtonElement>('.request-item')[1].click();
+    http.expectOne('/api/requests/2').flush({ request: second });
+    lateAnalysis.flush({ ...draft, decisionReason: 'Outdated analysis' });
+    await fixture.whenStable();
+    expect(element.textContent).not.toContain('Outdated analysis');
+    expect(element.textContent).toContain('No analysis available');
     http.verify();
   });
 });

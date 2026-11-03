@@ -1,10 +1,17 @@
 using System.Net;
 using System.Net.Http.Json;
 using AsmtAI.Api.Contracts;
+using AsmtAI.Application.Reviews;
+using AsmtAI.Domain.Reviews;
+using AsmtAI.Api.Services;
+using DocumentFormat.OpenXml.Packaging;
+using DocumentFormat.OpenXml.Presentation;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Drawing = DocumentFormat.OpenXml.Drawing;
 
 namespace AsmtAI.Api.Tests;
 
@@ -130,21 +137,205 @@ public sealed class RequestEndpointsTests
         Assert.Contains("/api/requests/{id}/review", document);
     }
 
-    private static MultipartFormDataContent CreateForm()
+    [Fact]
+    public async Task PresentationAnalysisIsExpertOnlyAndReturnsAnUnsavedDraft()
+    {
+        var assistant = new RecordingAssistant();
+        using var factory = CreateFactory("Development", IPAddress.Loopback, assistant);
+        using var applicant = factory.CreateClient();
+        using var expert = factory.CreateClient();
+        applicant.DefaultRequestHeaders.Add("X-Demo-Role", "applicant");
+        expert.DefaultRequestHeaders.Add("X-Demo-Role", "expert");
+        using var form = CreateForm(CreatePresentation());
+        var created = await applicant.PostAsync("/api/requests/", form);
+        var request = await created.Content.ReadFromJsonAsync<AssessmentRequestSummary>();
+        Assert.NotNull(request);
+        var url = $"/api/requests/{request.Id}/presentation/analysis";
+
+        Assert.Equal(HttpStatusCode.Forbidden, (await applicant.PostAsync(url, null)).StatusCode);
+        Assert.Null(assistant.Input);
+        var response = await expert.PostAsync(url, null);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal("no-store", response.Headers.CacheControl?.ToString());
+        var analysis = await response.Content.ReadFromJsonAsync<PresentationAnalysis>();
+        Assert.Equal(4, analysis?.Categories.Count);
+        Assert.Equal("Approve", analysis?.Decision);
+        Assert.Contains("Synthetic slide text", assistant.Input);
+        Assert.Contains("Demo applicant", assistant.Input);
+        Assert.Null((await applicant.GetFromJsonAsync<AssessmentRequestDetail>($"/api/requests/{request.Id}"))?.Feedback);
+    }
+
+    [Fact]
+    public async Task PresentationAnalysisRejectsUnreadableFileBeforeCallingAssistant()
+    {
+        var assistant = new RecordingAssistant();
+        using var factory = CreateFactory("Development", IPAddress.Loopback, assistant);
+        using var applicant = factory.CreateClient();
+        using var expert = factory.CreateClient();
+        applicant.DefaultRequestHeaders.Add("X-Demo-Role", "applicant");
+        expert.DefaultRequestHeaders.Add("X-Demo-Role", "expert");
+        using var form = CreateForm();
+        var created = await applicant.PostAsync("/api/requests/", form);
+        var request = await created.Content.ReadFromJsonAsync<AssessmentRequestSummary>();
+        Assert.NotNull(request);
+        Assert.Equal(HttpStatusCode.BadRequest, (await expert.PostAsync($"/api/requests/{request.Id}/presentation/analysis", null)).StatusCode);
+        Assert.Null(assistant.Input);
+    }
+
+    [Fact]
+    public async Task PresentationAnalysisReportsProviderFailuresWithoutLeakingDetails()
+    {
+        using var factory = CreateFactory("Development", IPAddress.Loopback, new FailingAssistant());
+        using var applicant = factory.CreateClient();
+        using var expert = factory.CreateClient();
+        applicant.DefaultRequestHeaders.Add("X-Demo-Role", "applicant");
+        expert.DefaultRequestHeaders.Add("X-Demo-Role", "expert");
+        using var form = CreateForm(CreatePresentation());
+        var created = await applicant.PostAsync("/api/requests/", form);
+        var request = await created.Content.ReadFromJsonAsync<AssessmentRequestSummary>();
+        Assert.NotNull(request);
+        var response = await expert.PostAsync($"/api/requests/{request.Id}/presentation/analysis", null);
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
+        Assert.DoesNotContain("private provider error", await response.Content.ReadAsStringAsync());
+    }
+
+    [Fact]
+    public async Task PresentationAnalysisRejectsMalformedProviderOutput()
+    {
+        using var factory = CreateFactory("Development", IPAddress.Loopback, new MalformedAssistant());
+        using var applicant = factory.CreateClient();
+        using var expert = factory.CreateClient();
+        applicant.DefaultRequestHeaders.Add("X-Demo-Role", "applicant");
+        expert.DefaultRequestHeaders.Add("X-Demo-Role", "expert");
+        using var form = CreateForm(CreatePresentation());
+        var created = await applicant.PostAsync("/api/requests/", form);
+        var request = await created.Content.ReadFromJsonAsync<AssessmentRequestSummary>();
+        Assert.NotNull(request);
+        var response = await expert.PostAsync($"/api/requests/{request.Id}/presentation/analysis", null);
+        Assert.Equal(HttpStatusCode.BadGateway, response.StatusCode);
+        Assert.DoesNotContain("private model content", await response.Content.ReadAsStringAsync());
+    }
+
+        [Fact]
+        public void PresentationAnalysisParserRejectsIncompleteOrInconsistentReviews()
+        {
+                var parser = new PresentationAnalysisParser();
+                Assert.Throws<FormatException>(() => parser.Parse("# A markdown review, not a JSON object"));
+                Assert.Throws<FormatException>(() => parser.Parse("""
+                        {
+                            "categories": [
+                                { "name": "Development Experience", "status": "Insufficient", "notes": "No evidence." },
+                                { "name": "Architecture on Practice", "status": "Pass", "notes": "Evidence is present." },
+                                { "name": "Engineering Excellence", "status": "Pass", "notes": "Evidence is present." },
+                                { "name": "Leadership", "status": "Pass", "notes": "Evidence is present." }
+                            ],
+                            "gaps": [], "candidateFeedback": [], "decision": "Approve", "decisionReason": "Proceed."
+                        }
+                        """));
+        }
+
+    [LiveCopilotFact]
+    public async Task SyntheticPresentationCanBeAnalyzedThroughTheRealCopilotProvider()
+    {
+        var root = Environment.GetEnvironmentVariable("ASMT_AI_LIVE_AGENT_REPOSITORY");
+        using var factory = CreateFactory("Development", IPAddress.Loopback).WithWebHostBuilder(builder =>
+            builder.ConfigureAppConfiguration(configuration => configuration.AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["Ai:Provider"] = "copilot",
+                ["Ai:AgentRepositoryPath"] = root
+            })));
+        using var applicant = factory.CreateClient();
+        using var expert = factory.CreateClient();
+        expert.Timeout = TimeSpan.FromMinutes(3);
+        applicant.DefaultRequestHeaders.Add("X-Demo-Role", "applicant");
+        expert.DefaultRequestHeaders.Add("X-Demo-Role", "expert");
+        using var form = CreateForm(CreatePresentation());
+        var created = await applicant.PostAsync("/api/requests/", form);
+        var request = await created.Content.ReadFromJsonAsync<AssessmentRequestSummary>();
+        Assert.NotNull(request);
+        var response = await expert.PostAsync($"/api/requests/{request.Id}/presentation/analysis", null);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal(4, (await response.Content.ReadFromJsonAsync<PresentationAnalysis>())?.Categories.Count);
+    }
+
+    private static MultipartFormDataContent CreateForm(byte[]? presentation = null)
     {
         var form = new MultipartFormDataContent();
         form.Add(new StringContent("Demo applicant"), "candidateName");
         form.Add(new StringContent("A3"), "targetLevel");
-        form.Add(new ByteArrayContent([1, 2, 3]), "presentation", "slides.pptx");
+        form.Add(new ByteArrayContent(presentation ?? [1, 2, 3]), "presentation", "slides.pptx");
         return form;
     }
 
-    private static WebApplicationFactory<Program> CreateFactory(string environment, IPAddress address) =>
+    private static byte[] CreatePresentation()
+    {
+        using var stream = new MemoryStream();
+        using (var document = PresentationDocument.Create(stream, DocumentFormat.OpenXml.PresentationDocumentType.Presentation))
+        {
+            var presentation = document.AddPresentationPart();
+            presentation.Presentation = new Presentation(new SlideIdList());
+            var slide = presentation.AddNewPart<SlidePart>();
+            slide.Slide = new Slide(new CommonSlideData(new ShapeTree(new Shape(new TextBody(
+                new Drawing.BodyProperties(), new Drawing.ListStyle(), new Drawing.Paragraph(new Drawing.Run(new Drawing.Text("Synthetic slide text"))))))));
+            presentation.Presentation.SlideIdList!.Append(new SlideId { Id = 256U, RelationshipId = presentation.GetIdOfPart(slide) });
+        }
+        return stream.ToArray();
+    }
+
+    private static WebApplicationFactory<Program> CreateFactory(string environment, IPAddress address, IAssessmentAssistant? assistant = null) =>
         new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
         {
             builder.UseEnvironment(environment);
-            builder.ConfigureServices(services => services.AddSingleton<IStartupFilter>(new ClientAddressFilter(address)));
+            builder.ConfigureServices(services =>
+            {
+                services.AddSingleton<IStartupFilter>(new ClientAddressFilter(address));
+                if (assistant is not null) services.AddSingleton(assistant);
+            });
         });
+
+    private sealed class RecordingAssistant : IAssessmentAssistant
+    {
+        public string? Input { get; private set; }
+        public Task<ReviewDraft> GenerateReviewAsync(string presentation, CancellationToken cancellationToken)
+        {
+            Input = presentation;
+                        return Task.FromResult(new ReviewDraft("""
+                                {
+                                    "categories": [
+                                        { "name": "Development Experience", "status": "Pass", "notes": "Relevant examples are present." },
+                                        { "name": "Architecture on Practice", "status": "Thin", "notes": "Trade-offs need more depth." },
+                                        { "name": "Engineering Excellence", "status": "Pass", "notes": "Testing and delivery are covered." },
+                                        { "name": "Leadership", "status": "Pass", "notes": "Mentoring is described." }
+                                    ],
+                                    "gaps": [ { "category": "Development Experience", "skill": "Async", "reason": "No example is given." } ],
+                                    "candidateFeedback": [],
+                                    "decision": "Approve",
+                                    "decisionReason": "All major categories are represented."
+                                }
+                                """));
+        }
+    }
+
+    private sealed class FailingAssistant : IAssessmentAssistant
+    {
+        public Task<ReviewDraft> GenerateReviewAsync(string presentation, CancellationToken cancellationToken) =>
+            throw new InvalidOperationException("private provider error");
+    }
+
+    private sealed class MalformedAssistant : IAssessmentAssistant
+    {
+        public Task<ReviewDraft> GenerateReviewAsync(string presentation, CancellationToken cancellationToken) =>
+            Task.FromResult(new ReviewDraft("private model content"));
+    }
+
+    public sealed class LiveCopilotFactAttribute : FactAttribute
+    {
+        public LiveCopilotFactAttribute()
+        {
+            if (string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("ASMT_AI_LIVE_AGENT_REPOSITORY")))
+                Skip = "Set ASMT_AI_LIVE_AGENT_REPOSITORY to enable the live Copilot test.";
+        }
+    }
 
     private sealed class ClientAddressFilter(IPAddress address) : IStartupFilter
     {
