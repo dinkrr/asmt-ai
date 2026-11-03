@@ -3,7 +3,7 @@ import { Component, DestroyRef, effect, inject, signal, untracked } from '@angul
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
 import { AppRole, RoleService } from '../../core/role.service';
-import { RequestDetail, RequestSummary, RequestsService, ReviewInput } from './requests.service';
+import { PresentationAnalysis, RequestDetail, RequestSummary, RequestsService, ReviewInput } from './requests.service';
 
 type ExpertView = 'review' | 'questions' | 'feedback';
 
@@ -24,6 +24,8 @@ export class Requests {
   protected readonly creating = signal(false);
   protected readonly loading = signal(false);
   protected readonly saving = signal(false);
+  protected readonly analyzing = signal(false);
+  protected readonly analysis = signal<PresentationAnalysis | null>(null);
   protected readonly error = signal('');
   protected readonly notice = signal('');
   protected readonly expertView = signal<ExpertView>('review');
@@ -42,6 +44,8 @@ export class Requests {
       this.creating.set(false);
       this.expertView.set('review');
       this.saving.set(false);
+      this.analyzing.set(false);
+      this.analysis.set(null);
       this.error.set('');
       this.notice.set('');
       untracked(() => this.load(role, generation));
@@ -51,6 +55,8 @@ export class Requests {
   protected newRequest(): void {
     this.selectionVersion++;
     this.selected.set(null);
+    this.analyzing.set(false);
+    this.analysis.set(null);
     this.candidateName = '';
     this.targetLevel = 'A3';
     this.presentation = null;
@@ -95,6 +101,8 @@ export class Requests {
     this.creating.set(false);
     this.expertView.set('review');
     this.selected.set(null);
+    this.analyzing.set(false);
+    this.analysis.set(null);
     this.error.set('');
     this.notice.set('');
     this.api.get(request.id, this.roles.role()).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
@@ -121,6 +129,28 @@ export class Requests {
     event.preventDefault();
     this.expertView.set(views[next]);
     (event.currentTarget as HTMLElement).parentElement?.querySelector<HTMLElement>(`#tab-${views[next]}`)?.focus();
+  }
+
+  protected analyzePresentation(): void {
+    const detail = this.selected();
+    if (!detail || this.roles.role() !== 'expert' || this.analyzing()) return;
+    const generation = this.generation;
+    const selection = this.selectionVersion;
+    this.analyzing.set(true);
+    this.error.set('');
+    this.notice.set('');
+    this.api.analyzePresentation(detail.request.id).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
+      next: (draft) => {
+        if (generation !== this.generation || selection !== this.selectionVersion) return;
+        this.analysis.set(draft);
+        this.analyzing.set(false);
+      },
+      error: (error: HttpErrorResponse) => {
+        if (generation !== this.generation || selection !== this.selectionVersion) return;
+        this.analyzing.set(false);
+        this.error.set(this.errorMessage(error, 'Could not analyze the presentation.'));
+      }
+    });
   }
 
   protected saveReview(): void {

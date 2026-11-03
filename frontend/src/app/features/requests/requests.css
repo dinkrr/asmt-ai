@@ -64,10 +64,35 @@ button:disabled { opacity:.55; cursor:not-allowed; }
 .ai-status { margin:0 0 18px; color:#6d7988; font-size:13px; }
 .analysis-empty { display:grid; gap:5px; padding:24px 0; border-top:1px solid #dfe4eb; color:#7b8998; font-size:13px; overflow-wrap:anywhere; }
 .analysis-empty strong { color:#526173; font-size:14px; }
+.analysis-panel { margin-top:14px; padding:16px 18px; border:1px solid #dfe4eb; border-radius:4px; background:#fff; }
+.analysis-panel-heading { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:8px; }
+.analysis-panel-heading h3 { margin:0; color:#414b5c; font-size:15px; }
+.analysis-panel-heading > span { color:#7b8998; font-size:12px; }
+.assessment-row { display:grid; grid-template-columns:minmax(145px,1fr) 92px minmax(180px,2fr); align-items:center; gap:12px; padding:13px 0; border-top:1px solid #dfe4eb; }
+.assessment-row strong { min-width:0; color:#414b5c; font-size:13px; overflow-wrap:anywhere; }
+.assessment-row p { min-width:0; margin:0; color:#778395; font-size:13px; line-height:1.45; overflow-wrap:anywhere; }
+.assessment-status,.decision-badge { display:inline-flex; width:max-content; max-width:100%; align-items:center; padding:4px 9px; border-radius:3px; font-size:11px; font-weight:700; text-transform:uppercase; }
+.assessment-status.pass,.decision-badge { color:#087f9b; background:#e2f5f9; }
+.assessment-status.thin { color:#94601d; background:#fff2df; }
+.assessment-status.insufficient,.decision-badge.send-back-badge { color:#a2463b; background:#fff0ed; }
+.gap-row { display:grid; grid-template-columns:30px minmax(0,1fr); gap:8px; padding:9px 0; border-top:1px solid #edf0f4; }
+.gap-number { color:#8a96a5; font-size:12px; font-weight:700; }
+.gap-row strong,.gap-row div > span { display:block; overflow-wrap:anywhere; }
+.gap-row div { min-width:0; }
+.gap-row strong { color:#414b5c; font-size:13px; font-weight:600; }
+.gap-row div > span { margin-top:3px; color:#778395; font-size:12px; }
+.analysis-note { display:block; margin-top:10px; color:#778395; font-size:12px; }
+.decision-panel { border-left:3px solid #078ba5; }
+.decision-panel.send-back { border-left-color:#b75a4c; }
+.decision-panel p { margin:8px 0; color:#526173; font-size:13px; line-height:1.5; }
+.decision-panel h4 { margin:14px 0 6px; color:#414b5c; font-size:13px; }
+.decision-panel ul { margin:0; padding-left:20px; color:#526173; font-size:13px; }
+.decision-panel li + li { margin-top:5px; }
 .checkbox { display:flex; gap:8px; align-items:center; margin-top:18px; }
 .checkbox input { width:16px; height:16px; accent-color:#078ba5; }
 .message { margin-top:18px; padding:10px 12px; border-left:3px solid; font-size:13px; }
 .error { border-color:#c25b4b; background:#fff2ef; color:#8c3d30; }
 .success { border-color:#398c69; background:#eaf7f0; color:#286c4d; }
-@media (max-width:620px) { .layout { grid-template-columns:1fr; } .sidebar { border-right:0; border-bottom:1px solid #dfe4eb; } .sidebar-heading { padding:12px 16px; } .sidebar-empty { padding:12px 16px; } .breadcrumb { padding:10px 16px; } .workspace { padding:22px 16px 48px; } .empty-state { padding:65px 12px; } .field-grid,.detail-meta { grid-template-columns:1fr 1fr; } .heading { align-items:start; } .section-heading { align-items:start; } }
+@media (max-width:620px) { .layout { grid-template-columns:1fr; } .sidebar { border-right:0; border-bottom:1px solid #dfe4eb; } .sidebar-heading { padding:12px 16px; } .sidebar-empty { padding:12px 16px; } .breadcrumb { padding:10px 16px; } .workspace { padding:22px 16px 48px; } .empty-state { padding:65px 12px; } .field-grid,.detail-meta { grid-template-columns:1fr 1fr; } .heading { align-items:start; } .section-heading { align-items:start; } .assessment-row { grid-template-columns:minmax(0,1fr) auto; gap:8px; } .assessment-row p { grid-column:1 / -1; } .analysis-panel { padding:14px; } }
+@media (min-width:621px) and (max-width:900px) { .assessment-row { grid-template-columns:minmax(0,1fr) auto; gap:8px; } .assessment-row p { grid-column:1 / -1; } .analysis-panel { padding:14px; } }
 @media (max-width:380px) { .field-grid { grid-template-columns:1fr; } .field-grid label + label { margin-top:0; } .heading { flex-wrap:wrap; } }

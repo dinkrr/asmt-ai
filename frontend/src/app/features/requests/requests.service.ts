@@ -25,6 +25,14 @@ export interface ReviewInput {
   reviewed: boolean;
 }
 
+export interface PresentationAnalysis {
+  categories: { name: string; status: 'Pass' | 'Thin' | 'Insufficient'; notes: string }[];
+  gaps: { category: string; skill: string; reason: string }[];
+  candidateFeedback: string[];
+  decision: 'Approve' | 'SendBack';
+  decisionReason: string;
+}
+
 @Injectable({ providedIn: 'root' })
 export class RequestsService {
   private readonly http = inject(HttpClient);
@@ -48,6 +56,10 @@ export class RequestsService {
 
   saveReview(id: string, review: ReviewInput) {
     return this.http.put<void>(`/api/requests/${id}/review`, review, { headers: this.headers('expert') });
+  }
+
+  analyzePresentation(id: string) {
+    return this.http.post<PresentationAnalysis>(`/api/requests/${id}/presentation/analysis`, null, { headers: this.headers('expert') });
   }
 
   download(id: string, role: AppRole) {

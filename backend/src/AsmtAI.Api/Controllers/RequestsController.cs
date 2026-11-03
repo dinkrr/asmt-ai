@@ -1,8 +1,13 @@
 using AsmtAI.Api.Contracts;
 using AsmtAI.Api.Filters;
 using AsmtAI.Api.Services;
+using AsmtAI.Application.Reviews;
 using AsmtAI.Domain.Users;
+using AsmtAI.Infrastructure.Ai;
+using DocumentFormat.OpenXml.Packaging;
 using Microsoft.AspNetCore.Mvc;
+using System.Text.Json;
+using System.Xml;
 
 namespace AsmtAI.Api.Controllers;
 
@@ -70,6 +75,55 @@ public sealed class RequestsController(IAssessmentRequestService service) : Cont
         if (presentation is null) return NotFound();
         Response.Headers.XContentTypeOptions = "nosniff";
         return File(presentation.Content, "application/octet-stream", presentation.FileName);
+    }
+
+    [HttpPost("{id:guid}/presentation/analysis")]
+    [EndpointSummary("Generate a presentation analysis for expert review")]
+    [ProducesResponseType<PresentationAnalysis>(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status502BadGateway)]
+    [ProducesResponseType(StatusCodes.Status503ServiceUnavailable)]
+    public async Task<ActionResult<PresentationAnalysis>> AnalyzePresentation(Guid id, CancellationToken cancellationToken)
+    {
+        if (GetRole() != AssessmentRole.Expert) return StatusCode(StatusCodes.Status403Forbidden);
+        var detail = await service.GetAsync(id, true, cancellationToken);
+        var presentation = await service.GetPresentationAsync(id, cancellationToken);
+        if (detail is null || presentation is null) return NotFound();
+        if (!Path.GetExtension(presentation.FileName).Equals(".pptx", StringComparison.OrdinalIgnoreCase))
+            return BadRequestMessage("AI analysis requires a .pptx presentation.");
+
+        string text;
+        try
+        {
+            text = new PresentationTextExtractor().Extract(presentation.Content);
+        }
+        catch (Exception exception) when (exception is InvalidDataException or IOException or OpenXmlPackageException or XmlException or ArgumentException)
+        {
+            return BadRequestMessage("The presentation could not be read. Use a valid .pptx file with slide text.");
+        }
+
+        try
+        {
+            var input = JsonSerializer.Serialize(new { detail.Request.CandidateName, detail.Request.TargetLevel, Presentation = text });
+            var reviewer = HttpContext.RequestServices.GetRequiredService<ReviewPresentation>();
+            var draft = await reviewer.ExecuteAsync(input, cancellationToken);
+            var analysis = new PresentationAnalysisParser().Parse(draft.Content);
+            return Ok(analysis);
+        }
+        catch (FormatException exception)
+        {
+            HttpContext.RequestServices.GetRequiredService<ILogger<RequestsController>>()
+                .LogWarning("Presentation analysis response was invalid ({ErrorType}).", exception.GetType().Name);
+            return StatusCode(StatusCodes.Status502BadGateway, "The AI response could not be formatted as a presentation review. Please regenerate the analysis.");
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            HttpContext.RequestServices.GetRequiredService<ILogger<RequestsController>>()
+                .LogWarning("Presentation analysis failed ({ErrorType}).", exception.GetType().Name);
+            return StatusCode(StatusCodes.Status503ServiceUnavailable, "AI analysis is unavailable. Check the Copilot sign-in and AI configuration.");
+        }
     }
 
     [HttpPut("{id:guid}/review")]

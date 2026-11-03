@@ -8,3 +8,17 @@ public sealed record AssessmentRequestDetail(AssessmentRequestSummary Request, s
 
 /// <summary>Expert-authored questions, transcript, feedback, and review status.</summary>
 public sealed record SaveAssessmentReview(string? Questions, string? Transcript, string? Feedback, bool Reviewed);
+
+/// <summary>AI-generated presentation analysis for expert review.</summary>
+public sealed record PresentationAnalysis(
+	IReadOnlyList<PresentationCategoryAssessment> Categories,
+	IReadOnlyList<PresentationGap> Gaps,
+	IReadOnlyList<string> CandidateFeedback,
+	string Decision,
+	string DecisionReason);
+
+/// <summary>Assessment of one presentation category.</summary>
+public sealed record PresentationCategoryAssessment(string Name, string Status, string Notes);
+
+/// <summary>A required skill to probe during the assessment session.</summary>
+public sealed record PresentationGap(string Category, string Skill, string Reason);
