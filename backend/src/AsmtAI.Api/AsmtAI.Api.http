@@ -1,6 +1,49 @@
 @AsmtAI.Api_HostAddress = http://localhost:5233
+@requestId = 00000000-0000-0000-0000-000000000000
 
 GET {{AsmtAI.Api_HostAddress}}/api/health
 Accept: application/json
 
 ###
+GET {{AsmtAI.Api_HostAddress}}/api/requests/
+X-Demo-Role: expert
+
+###
+POST {{AsmtAI.Api_HostAddress}}/api/requests/
+X-Demo-Role: applicant
+Content-Type: multipart/form-data; boundary=assessment-demo
+
+--assessment-demo
+Content-Disposition: form-data; name="candidateName"
+
+Demo applicant
+--assessment-demo
+Content-Disposition: form-data; name="targetLevel"
+
+A3
+--assessment-demo
+Content-Disposition: form-data; name="presentation"; filename="demo.pptx"
+Content-Type: application/octet-stream
+
+synthetic demo content
+--assessment-demo--
+
+### Replace requestId with the ID from the create response.
+GET {{AsmtAI.Api_HostAddress}}/api/requests/{{requestId}}
+X-Demo-Role: expert
+
+###
+GET {{AsmtAI.Api_HostAddress}}/api/requests/{{requestId}}/presentation
+X-Demo-Role: expert
+
+###
+PUT {{AsmtAI.Api_HostAddress}}/api/requests/{{requestId}}/review
+X-Demo-Role: expert
+Content-Type: application/json
+
+{
+	"questions": "Describe a design decision.",
+	"transcript": "Synthetic interview transcript.",
+	"feedback": "Synthetic expert feedback.",
+	"reviewed": true
+}
